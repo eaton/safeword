@@ -221,18 +221,20 @@ function safeword_field_widget_form(&$form, &$form_state, $field, $instance, $la
   switch ($instance['widget']['type']) {
     case 'safeword_machine_name':
       $element['human'] = array(
+        '#title' => $element['#title'],
         '#type' => 'textfield',
-        '#default_value' => $items[$delta]['human'],
+        '#default_value' => empty($items[$delta]['human']) ? '' : $items[$delta]['human'],
         '#maxlength' => $field['settings']['max_length'],
+        '#description' => $element['#description'],
       );
       $element['machine'] = array(
         '#type' => 'machine_name',
-        '#default_value' => $items[$delta]['machine'],
+        '#default_value' => empty($items[$delta]['machine']) ? '' : $items[$delta]['machine'],
         '#maxlength' => $field['settings']['max_length'],
         '#description' => $field['settings']['machine_description'],
         '#machine_name' => array(
           'exists' => 'safeword_dummy_callback',
-          'source' => array('human'),
+          'source' => array($field['field_name'], $langcode, $delta, 'human'),
           'label' => $field['settings']['replace_value'],
           'replace_pattern' => $field['settings']['replace_pattern'],
           'replace' => $field['settings']['replace_value'],
