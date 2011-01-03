@@ -1,0 +1,255 @@
+<?php
+
+/**
+ * @file
+ * Provides a FieldAPI field type, widget, and several formatters for a combined
+ * human readable/machine name pair of values. Possible uses include automatic
+ * generation of editable pathauto segments, handy Views argument values, and
+ * impressing friends.
+ */
+
+
+/**
+ * Implements hook_field_info().
+ *
+ * Provides the description of the field.
+ */
+function safeword_field_info() {
+  return array(
+    'safeword' => array(
+      'label' => t('Text with machine name'),
+      'description' => t('A field with human readable text and a scrubbed machine-safe variation.'),
+      'default_widget' => 'safeword_machine_name',
+      'default_formatter' => 'safeword_human',
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_validate().
+ *
+ * Verifies that both the human and machine readable values are populated.
+ */
+function safeword_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  $regex = $field['settings']['replace_pattern'];
+  $machine_label = $field['settings']['machine_label'];
+  
+  // @TODO: make this work
+  return;
+ 
+  foreach ($items as $delta => $item) {
+    if (!preg_match($regex, $item['machine'])) {
+      $errors[$field['field_name']][$langcode][$delta][] = array(
+        'error' => 'safeword_invalid',
+        'message' => t('%machine_label may not contain characters matching the regular expression @regex.',
+          array('@regex' => $regex, '%machine_label' => $machine_label)),
+      );
+    }
+  }
+}
+
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function safeword_field_is_empty($item, $field) {
+  return (empty($item['human']) && empty($item['machine']));
+}
+
+
+/**
+ * Implements hook_field_settings_form().
+ */
+function safeword_field_settings_form($field, $instance, $has_data) {
+  $settings = $field['settings'];
+  $settings += array(
+    'max_length' => 255,
+    'machine_label' => t('Machine readable version'),
+    'machine_description' => t('A URL-safe version of the text. It may only contain lowercase letters, numbers and underscores.'),
+    'replace_pattern' => '[^a-z0-9_]+',
+    'replace_value' => '_',
+    'allow_machine_changes' => TRUE,
+  );
+
+  $form = array();
+
+  if ($field['type'] == 'safeword') {
+    // @TODO: Smarter handling of the #disabled flag. These can all collide in
+    // counterintuitive ways if we're not careful.
+
+    $form['max_length'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Maximum length'),
+      '#default_value' => $settings['max_length'],
+      '#required' => TRUE,
+      '#description' => t('The maximum length of the field in characters.'),
+      '#element_validate' => array('_element_validate_integer_positive'),
+      '#disabled' => $has_data,
+    );
+
+    $form['machine_label'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Machine name label'),
+      '#default_value' => $settings['machine_label'],
+      '#description' => t('Label for the machine-readable version of the field.'),
+    );
+
+    $form['machine_description'] = array(
+      '#type' => 'textarea',
+      '#title' => t('Machine name description'),
+      '#default_value' => $settings['machine_description'],
+      '#description' => t('Descriptive text for the machine-readable version of the field.'),
+    );
+
+    $form['replace_pattern'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Replacement pattern'),
+      '#default_value' => $settings['replace_pattern'],
+      '#required' => TRUE,
+      '#description' => t('A regular expression matching the banned characters.'),
+      '#disabled' => $has_data,
+    );
+
+    $form['replace_value'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Replacement value'),
+      '#default_value' => $settings['replace_value'],
+      '#required' => TRUE,
+      '#description' => t('A character to replace disallowed characters in the machine name via JavaScript.'),
+      '#disabled' => $has_data,
+    );
+
+    $form['allow_machine_changes'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Allow machine name changes'),
+      '#default_value' => $settings['allow_machine_changes'],
+      '#description' => t('If this option is disabled, machine-readable text will be locked when nodes are edited.'),
+      '#disabled' => $has_data,
+    );
+  }
+
+  return $form;
+}
+
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function safeword_field_formatter_info() {
+  return array(
+    'safeword_human' => array(
+      'label' => t('Human-readable version'),
+      'field types' => array('safeword'),
+    ),
+    'safeword_machine' => array(
+      'label' => t('Machine-readable version'),
+      'field types' => array('safeword'),
+    ),
+    'safeword_both' => array(
+      'label' => t('Show both versions'),
+      'field types' => array('safeword'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_formatter_view().
+ *
+ * Three formatters are implemented.
+ * - safeword_human outputs an XSL-scrubbed version of the human text.
+ * - safeword_machine outputs the machine readable text, optionally displaying
+ *   the human readable text in an HTML <acronym> tag.
+ * - safeword_both outputs the human readable text with the machine version
+ *   in parenthesis.
+ */
+function safeword_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  switch ($display['type']) {
+    // This formatter simply outputs the field as text and with a color.
+    case 'safeword_human':
+      foreach ($items as $delta => $item) {
+        $element[$delta]['#markup'] = filter_xss($item['human']);
+      }
+      break;
+
+    case 'safeword_machine':
+      foreach ($items as $delta => $item) {
+        $element[$delta]['#markup'] = '<acronym title="' . filter_xss($item['human']) . '">' . filter_xss($item['machine']) . '</acronym>';
+      }
+      break;
+
+    // This formatter simply outputs the field as text and with a color.
+    case 'safeword_both':
+      foreach ($items as $delta => $item) {
+        $element[$delta]['#markup'] = t("!human (!machine)", array('!human' => filter_xss($item['human']), '!machine' => filter_xss($item['machine'])));
+      }
+      break;
+  }
+
+  return $element;
+}
+
+
+/**
+ * Implements hook_field_widget_info().
+ *
+ * Provides a widget that uses Drupal's built-in machine name FormAPI element.
+ */
+function safeword_field_widget_info() {
+  return array(
+    'safeword_machine_name' => array(
+      'label' => t('Text with machine name'),
+      'field types' => array('safeword'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ *
+ * safeword_machine_name uses Drupal's built-in 'Machine Readable Name' form
+ * element to display both values for editing.
+ */
+function safeword_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $element += array(
+    '#delta' => $delta,
+  );
+
+  switch ($instance['widget']['type']) {
+    case 'safeword_machine_name':
+      $element['human'] = array(
+        '#type' => 'textfield',
+        '#default_value' => $items[$delta]['human'],
+        '#maxlength' => $field['settings']['max_length'],
+      );
+      $element['machine'] = array(
+        '#type' => 'machine_name',
+        '#default_value' => $items[$delta]['machine'],
+        '#maxlength' => $field['settings']['max_length'],
+        '#description' => $field['settings']['machine_description'],
+        '#machine_name' => array(
+          'exists' => 'safeword_dummy_callback',
+          'source' => array('human'),
+          'label' => $field['settings']['replace_value'],
+          'replace_pattern' => $field['settings']['replace_pattern'],
+          'replace' => $field['settings']['replace_value'],
+        ),
+        // @TODO - change this. It defaults to required, but should only be
+        // in actual edit mode.
+        '#required' => FALSE,
+        '#disabled' => (!empty($items[$delta]['machine']) && empty($field['settings']['allow_machine_changes'])),
+      );
+  }
+  return $element;
+}
+
+/**
+ * This dummy callback always returns FALSE, as the "exists" callback doesn't
+ * provide enough context for us to spot duplications on a per-field basis.
+ */
+function safeword_dummy_callback($name) {
+  return FALSE;
+}
