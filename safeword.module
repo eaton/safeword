@@ -250,6 +250,11 @@ function safeword_field_widget_form(&$form, &$form_state, $field, $instance, $la
   $element += array(
     '#delta' => $delta,
   );
+  
+  // The $element variable is a pre-populated form element with no #type property,
+  // but all the bits like #description, #title, and #required filled in as
+  // appropriate. When building sub-elements for this widget, we can copy the
+  // FAPI properties from the parent element.
 
   switch ($instance['widget']['type']) {
     case 'safeword_machine_name':
@@ -286,21 +291,16 @@ function safeword_field_widget_form(&$form, &$form_state, $field, $instance, $la
 /**
  * Uniqueness callback for safeword fields.
  */
-function safeword_unique_callback($name, array $form_state = NULL) {
+function safeword_unique_callback($name, array $element = NULL, array $form_state = NULL) {
   // This should never be the case, but it doesn't hurt to check.
-  if (empty($form_state)) {
+  if (empty($element)) {
     return FALSE;
   }
   else {
     return FALSE;
 
-    // TODO: Actually check for duplicate values.
-  
-    // Get the field settings, check the uniqueness, then determine whether we're
-    // going to check for uniqueness at all, check for it per-bundle, or check
-    // across all instances of the field.
-    
-    // Come to think of it, we're probably better off sticking hints in $form_state
-    // when we build the field than parsing the full form state for metadata.
+    // TODO: Actually check for duplicate values - this relies on the latest patch
+    // at http://drupal.org/node/994870; without it we don't get enough context
+    // to figure out what field's value is being tested.
   }
 }
