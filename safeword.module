@@ -131,7 +131,7 @@ function safeword_field_settings_form($field, $instance, $has_data) {
       '#type' => 'checkbox',
       '#title' => t('Allow machine name changes'),
       '#default_value' => $settings['allow_machine_changes'],
-      '#description' => t('If this option is disabled, machine-readable text will be locked when nodes are edited.'),
+      '#description' => t('If this option is disabled, machine-readable text will be locked after creation.'),
       '#disabled' => $has_data,
     );
 
@@ -144,7 +144,10 @@ function safeword_field_settings_form($field, $instance, $has_data) {
         'instance' => t('On a per-field-instance basis'),
         'field' => t('Globally, across all instances of the field'),
       ),
-      '#description' => t('Per-instance uniqueness treats each bundle this field is attached to as a separate pool of values, while Global uniqueness ensures that values must be unique whenever this field is used. Select None to allow any values, regardless of their uniqeuness.'),
+      '#description' => t('Per-instance uniqueness treats each bundle this field is attached to as '.
+                          'a separate pool of values, while Global uniqueness ensures that values '.
+                          'must be unique whenever this field is used. Select None to allow any values, '.
+                          'regardless of their uniqueness.'),
       '#disabled' => $has_data,
     );
   }
