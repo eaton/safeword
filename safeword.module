@@ -40,12 +40,9 @@ function safeword_field_info() {
 function safeword_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
   $regex = $field['settings']['replace_pattern'];
   $machine_label = $field['settings']['machine_label'];
-  
-  // @TODO: make this work
-  return;
  
   foreach ($items as $delta => $item) {
-    if (!preg_match($regex, $item['machine'])) {
+    if (!preg_match('/' . $regex . '/', $item['machine'])) {
       $errors[$field['field_name']][$langcode][$delta][] = array(
         'error' => 'safeword_invalid',
         'message' => t('%machine_label may not contain characters matching the regular expression @regex.',
@@ -76,7 +73,7 @@ function safeword_field_settings_form($field, $instance, $has_data) {
     'replace_pattern' => '[^a-z0-9-]+',
     'replace_value' => '-',
     'allow_machine_changes' => TRUE,
-    'uniqueness' => 'field',
+    'unique' => FALSE,
   );
 
   $form = array();
@@ -115,7 +112,6 @@ function safeword_field_settings_form($field, $instance, $has_data) {
       '#default_value' => $settings['replace_pattern'],
       '#required' => TRUE,
       '#description' => t('A regular expression matching the banned characters.'),
-      '#disabled' => $has_data,
     );
 
     $form['replace_value'] = array(
@@ -124,7 +120,12 @@ function safeword_field_settings_form($field, $instance, $has_data) {
       '#default_value' => $settings['replace_value'],
       '#required' => TRUE,
       '#description' => t('A character to replace disallowed characters in the machine name via JavaScript.'),
-      '#disabled' => $has_data,
+    );
+
+    $form['unique'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Require unique values for this field'),
+      '#default_value' => $settings['unique'],
     );
 
     $form['allow_machine_changes'] = array(
@@ -132,23 +133,6 @@ function safeword_field_settings_form($field, $instance, $has_data) {
       '#title' => t('Allow machine name changes'),
       '#default_value' => $settings['allow_machine_changes'],
       '#description' => t('If this option is disabled, machine-readable text will be locked after creation.'),
-      '#disabled' => $has_data,
-    );
-
-    $form['uniqueness'] = array(
-      '#type' => 'select',
-      '#title' => t('Require unique values'),
-      '#default_value' => $settings['uniqueness'],
-      '#options' => array(
-        'none' => t('Never'),
-        'instance' => t('On a per-field-instance basis'),
-        'field' => t('Globally, across all instances of the field'),
-      ),
-      '#description' => t('Per-instance uniqueness treats each bundle this field is attached to as '.
-                          'a separate pool of values, while Global uniqueness ensures that values '.
-                          'must be unique whenever this field is used. Select None to allow any values, '.
-                          'regardless of their uniqueness.'),
-      '#disabled' => $has_data,
     );
   }
 
@@ -275,17 +259,25 @@ function safeword_field_widget_form(&$form, &$form_state, $field, $instance, $la
         '#maxlength' => $field['settings']['max_length'],
         '#description' => $field['settings']['machine_description'],
         '#machine_name' => array(
-          'exists' => 'safeword_unique_callback',
           'source' => array($field['field_name'], $langcode, $delta, 'human'),
           'label' => $field['settings']['machine_label'],
           'replace_pattern' => $field['settings']['replace_pattern'],
           'replace' => $field['settings']['replace_value'],
         ),
-        // @TODO - change this. It defaults to required, but should only be
-        // in actual edit mode.
         '#required' => $element['#required'],
         '#disabled' => (!empty($items[$delta]['machine']) && empty($field['settings']['allow_machine_changes'])),
       );
+
+      // Only add the code for the uniqueness check if the field requires it.
+      // No need to trigger the extra checks.
+      if ($field['settings']['unique']) {
+        $element['machine']['#machine_name']['exists'] = 'safeword_value_collides';
+        $element['machine']['#exists_params'] = array(
+          'field_name' => $field['field_name'],
+          'entity_type' => $instance['entity_type'],
+          'bundle' => $instance['bundle'],
+        );
+      }
   }
   return $element;
 }
@@ -294,16 +286,23 @@ function safeword_field_widget_form(&$form, &$form_state, $field, $instance, $la
 /**
  * Uniqueness callback for safeword fields.
  */
-function safeword_unique_callback($name, array $element = NULL, array $form_state = NULL) {
+function safeword_value_collides($name, array $element = NULL) {
   // This should never be the case, but it doesn't hurt to check.
-  if (empty($element)) {
+  if (empty($element) && empty($element['#exists_params'])) {
     return FALSE;
   }
   else {
-    return FALSE;
+    $settings = $element['#exists_params'];
 
-    // TODO: Actually check for duplicate values - this relies on the latest patch
-    // at http://drupal.org/node/994870; without it we don't get enough context
-    // to figure out what field's value is being tested.
+    $query = new EntityFieldQuery();
+    $query
+      ->entityCondition('entity_type', $settings['entity_type'], '=')
+      ->fieldCondition($settings['field_name'], 'machine', $name, '=')
+      ->count();
+    if (!empty($settings['bundle'])) {
+      $query->entityCondition('bundle', $settings['bundle'], '=');
+    }
+
+    return $query->execute() > 0 ? TRUE : FALSE;
   }
 }
