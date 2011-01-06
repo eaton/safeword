@@ -3,7 +3,7 @@
 /**
  * Implements hook_token_info().
  */
-function wafeword_token_info() {
+function safeword_token_info() {
   // Text module provides three different text field types.
   $info['types']['safeword-field'] = array(
     'name' => t('Safeword fields'),
