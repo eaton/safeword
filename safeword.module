@@ -40,7 +40,7 @@ function safeword_field_info() {
 function safeword_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
   $regex = $field['settings']['replace_pattern'];
   $machine_label = $field['settings']['machine_label'];
- 
+ return;
   foreach ($items as $delta => $item) {
     if (!preg_match('/' . $regex . '/', $item['machine'])) {
       $errors[$field['field_name']][$langcode][$delta][] = array(
@@ -305,4 +305,21 @@ function safeword_value_collides($name, array $element = NULL) {
 
     return $query->execute() > 0 ? TRUE : FALSE;
   }
+}
+
+
+/**
+ * Implements hook_field_views_data().
+ */
+function safeword_field_views_data($field) {
+  // All we need to do is ensure that the 'name field' for our argument
+  // definition is set properly, and we'll get the correct value in summary
+  // titles and breadcrumb trails.
+    $views_fields = field_views_field_default_views_data($field);
+
+  foreach ($views_fields as $key => $data) {
+    $views_fields[$key][$field['field_name'] . '_machine']['argument']['name field'] = 'human';
+  }
+
+  return $views_fields;
 }
